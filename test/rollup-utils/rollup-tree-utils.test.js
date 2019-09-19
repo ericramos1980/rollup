@@ -15,7 +15,7 @@ describe("Rollup tree utils", () => {
     it("hash leaf rollup tree", async () => {
     // Result retrieved from 'RollupHelpers.sol'
         const hash = "11642199753522708922542907447656316648265577382104794691235957329497111122738";
-        const res = rollupTreeUtils.hashLeafValueV2(amountDeposit, tokenId, Ax, Ay, BigInt(withdrawAddress), nonce);
+        const res = rollupTreeUtils.hashStateTree(amountDeposit, tokenId, Ax, Ay, BigInt(withdrawAddress), nonce);
     
         expect(res.hash.toString()).to.be.equal(hash);
     });

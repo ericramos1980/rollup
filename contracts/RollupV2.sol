@@ -54,7 +54,7 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
 
     // Hash of all on chain transmissions ( will be forged in two batches )
     // Forces 'operator' to add all on chain transmissions
-    uint256 fillingOnChainTxsHash;
+    uint256 fillingOnChainTxsHash = 0;
 
     // Fees of all on-chain transactions for the operator that forge that batch
     uint256 totalMinningOnChainFee;
@@ -91,8 +91,7 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * @dev Event called when a user makes a force withdraw
      * contains all data required for the operator to add the transaction
     */
-    event ForceFullWithdraw(uint idBalanceTree, uint amount, uint tokenId, uint Ax, uint Ay,
-        address withdrawAddress, uint nonce);
+    event ForceWithdraw(uint batchNumber, bytes32 txData);
 
     /**
      * @dev Event called when a deposit on top is done
@@ -159,11 +158,16 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         uint256 txData,
         uint128 loadAmount,
         address ethAddress,
-        uint256[2] memory babyPubKey
+        uint256[2] memory babyPubKey,
+        uint256 onChainFee
     ) private {
         Entry memory onChainHashData = buildOnChainData(fillingOnChainTxsHash, txData, loadAmount,
-            ethAddress, babyPubKey[0], babyPubKey[0]);
+            ethAddress, babyPubKey[0], babyPubKey[1]);
         fillingOnChainTxsHash = hashEntry(onChainHashData);
+        // Update total on-chain fees
+        totalFillingOnChainFee += onChainFee;
+        // Update number of on-chain transactions
+        currentOnChainTx++;
     }
 
     /**
@@ -186,29 +190,16 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         require(ethAddress != address(0), 'Must specify withdraw address');
         require(tokenList[tokenId] != address(0), 'token has not been registered');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
-
         // Get token deposit on rollup smart contract
         require(depositToken(tokenId, loadAmount), 'Fail deposit ERC20 transaction');
-
         // build txData for deposit
         bytes32 txDataDeposit = buildTxData(lastBalanceTreeIndex, 0, 0, tokenId, 0, 0, 0, true, true);
-
-        // Update 'fillingOnChainHash'
-        _updateOnChainHash(uint256(txDataDeposit), loadAmount, ethAddress, babyPubKey);
-
-        // Update total on-chain fees
-        totalFillingOnChainFee += msg.value;
-
-        // Update number of on-chain transactions
-        currentOnChainTx++;
-
+        _updateOnChainHash(uint256(txDataDeposit), loadAmount, ethAddress, babyPubKey, msg.value);
         // Insert tree information
         treeInfo[lastBalanceTreeIndex].tokenId = tokenId;
         treeInfo[lastBalanceTreeIndex].ethAddress = ethAddress;
-
         // trigger deposit event
         emit Deposit(getStateDepth(), txDataDeposit, loadAmount, ethAddress, babyPubKey[0], babyPubKey[1]);
-
         // Increment index leaf balance tree
         lastBalanceTreeIndex++;
     }
@@ -218,37 +209,92 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * @param idBalanceTree account identifier on the balance tree which will receive the deposit
      * @param loadAmount amount to be added into leaf specified by idBalanceTree
      * @param tokenId token identifier
+     * @param nonce nonce
     */
     function depositOnTop(
         uint64 idBalanceTree,
         uint128 loadAmount,
-        uint32 tokenId
+        uint32 tokenId,
+        uint48 nonce
     ) public payable{
-
         require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
         require(loadAmount < MAX_AMOUNT_DEPOSIT, 'deposit amount larger than the maximum allowed');
-        require(idBalanceTree <= lastBalanceTreeIndex, 'id leaf does not exist on balance tree');
+        require(idBalanceTree <= lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
         require(treeInfo[idBalanceTree].tokenId == tokenId, 'token type does not match');
         // Get token deposit on rollup smart contract
         require(depositToken(tokenId, loadAmount), 'Fail deposit ERC20 transaction');
-
-        // build txData for deposit
-        bytes32 txDataDepositOnTop = buildTxData(0, idBalanceTree, 0, tokenId, 0, 0, 0, true, false);
-
-        // Update 'fillingOnChainHash'
-        _updateOnChainHash(uint256(txDataDepositOnTop), loadAmount, address(0), [uint(0), uint(0)]);
-
-        // Update total on-chain fees
-        totalFillingOnChainFee += msg.value;
-
-        // Update number of on-chain transactions
-        currentOnChainTx++;
-
-        // event deposit on top
+        // build txData for deposit on top
+        bytes32 txDataDepositOnTop = buildTxData(0, idBalanceTree, 0, tokenId, nonce, 0, 0, true, false);
+        _updateOnChainHash(uint256(txDataDepositOnTop), loadAmount, address(0), [uint(0), uint(0)], msg.value);
         emit DepositOnTop(getStateDepth(), txDataDepositOnTop, loadAmount);
     }
 
+    /**
+     * @dev Withdraw balance from identifier balance tree
+     * user has to prove ownership of ethAddress
+     * @param idBalanceTree account identifier on the balance tree which will do the withdraw
+     * @param amount total amount coded as float 16 bits
+     * @param nonce nonce
+     */
+    function forceWithdraw(
+        uint64 idBalanceTree,
+        uint16 amount,
+        uint48 nonce
+    ) public payable{
+        require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
+        require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
+        require(msg.sender == treeInfo[idBalanceTree].ethAddress, 'Sender does not match identifier balance tree');
+        require(idBalanceTree <= lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
+        // build txData for withdraw
+        bytes32 txDataWithdraw = buildTxData(idBalanceTree, 0, amount, treeInfo[idBalanceTree].tokenId, nonce, 0, 0, true, false);
+        _updateOnChainHash(uint256(txDataWithdraw), 0, address(0), [uint(0), uint(0)], msg.value);
+        emit ForceWithdraw(getStateDepth(), txDataWithdraw);
+    }
+
+    /**
+     * @dev withdraw on-chain transaction to get balance from balance tree
+     * Before this call an off-chain withdraw transaction must be done
+     * Off-chain withdraw transaction will build a leaf on exit tree
+     * each batch forged will publish its exit tree root
+     * All leaves created on the exit are allowed to call on-chain transaction to finish the withdraw
+     * @param idBalanceTree account identifier on the balance tree
+     * @param amount amount to retrieve
+     * @param tokenId token type
+     * @param numExitRoot exit root depth. Number of batch where the withdar transaction has been done
+     * @param nonce nonce exit tree leaf
+     * @param babyPubKey BabyJubjub public key
+     * @param siblings siblings to demonstrate merkle tree proof
+     */
+    function withdraw(
+        uint64 idBalanceTree,
+        uint16 amount,
+        uint32 tokenId,
+        uint numExitRoot,
+        uint48 nonce,
+        uint256[2] memory babyPubKey,
+        uint256[] memory siblings
+    ) public {
+        // Build 'key' and 'value' for exit tree
+        uint256 keyExitTree = idBalanceTree;
+        Entry memory exitEntry = buildTreeState(amount, tokenId, babyPubKey[0], babyPubKey[1], msg.sender, nonce);
+        uint256 valueExitTree = hashEntry(exitEntry);
+        // Get exit root given its index depth
+        uint256 exitRoot = uint256(getExitRoot(numExitRoot));
+        // Check exit tree nullifier
+        uint256[] memory inputs = new uint256[](2);
+        inputs[0] = exitRoot;
+        inputs[1] = valueExitTree;
+        uint256 nullifier = hashGeneric(inputs);
+        require(exitNullifier[nullifier] == false, 'withdraw has been already done');
+        // Check sparse merkle tree proof
+        bool result = smtVerifier(exitRoot, siblings, keyExitTree, valueExitTree, 0, 0, false, false, 24);
+        require(result == true, 'invalid proof');
+        // Withdraw token from rollup smart contract to ethereum address
+        require(withdrawToken(tokenId, msg.sender, amount), 'Fail ERC20 withdraw');
+        // Set nullifier
+        exitNullifier[nullifier] = true;
+    }
 
     /**
      * @dev Checks proof given by the operator

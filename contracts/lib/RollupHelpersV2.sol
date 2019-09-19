@@ -197,15 +197,15 @@ contract RollupHelpersV2 {
    * @param token token type
    * @param Ax x coordinate public key babyJub
    * @param Ay y coordinate public key babyJub
-   * @param withAddress withdraw address
+   * @param ethAddress ethereum address
    * @param nonce nonce parameter
    * @return entry structure
    */
-  function buildTreeState(uint16 amount, uint16 token, uint256 Ax, uint Ay,
-    address withAddress, uint32 nonce) internal pure returns (Entry memory entry) {
+  function buildTreeState(uint16 amount, uint32 token, uint256 Ax, uint Ay,
+    address ethAddress, uint48 nonce) internal pure returns (Entry memory entry) {
      // build element 1
-    entry.e1 = bytes32(bytes4(uint32(token))) >> (256 - 32);
-    entry.e1 |= bytes32(bytes4(nonce)) >> (256 - 32 - 32);
+    entry.e1 = bytes32(bytes4(token)) >> (256 - 32);
+    entry.e1 |= bytes32(bytes6(nonce)) >> (256 - 48 - 32);
     // build element 2
     entry.e2 = bytes32(uint256(amount));
     // build element 3
@@ -213,7 +213,7 @@ contract RollupHelpersV2 {
     // build element 4
     entry.e4 = bytes32(Ay);
     // build element 5
-    entry.e5 = bytes32(bytes20(withAddress)) >> (256 - 160);
+    entry.e5 = bytes32(bytes20(ethAddress)) >> (256 - 160);
   }
 
   /**
@@ -260,7 +260,7 @@ contract RollupHelpersV2 {
    * @param oldOnChainHash previous on chain hash
    * @param txData transaction data coded into a bytes32
    * @param loadAmount input amount
-   * @param withdrawAddress address to withdraw
+   * @param ethAddress address to withdraw
    * @param Ax x coordinate public key BabyJubJub
    * @param Ay y coordinate public key BabyJubJub
    * @return entry structure
@@ -269,7 +269,7 @@ contract RollupHelpersV2 {
     uint256 oldOnChainHash,
     uint256 txData,
     uint128 loadAmount,
-    address withdrawAddress,
+    address ethAddress,
     uint256 Ax,
     uint256 Ay
     ) internal pure returns (Entry memory entry) {
@@ -280,7 +280,7 @@ contract RollupHelpersV2 {
     // build element 3
     entry.e3 = bytes32(bytes16(loadAmount)) >> (256 - 128);
     // build element 4
-    entry.e4 = bytes32(bytes20(withdrawAddress)) >> (256 - 160);
+    entry.e4 = bytes32(bytes20(ethAddress)) >> (256 - 160);
     // build element 5
     entry.e5 = bytes32(Ax);
     // build element 6
