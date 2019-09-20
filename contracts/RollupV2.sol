@@ -79,26 +79,13 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * contains all data required for the operator to:
      * add leaf to balance tree
     */
-    event Deposit(uint batchNumber, bytes32 txData, uint128 loadAmount, address ethAddress, uint256 Ax, uint256 Ay);
+    event OnChainTx(uint batchNumber, bytes32 txData, uint128 loadAmount, address ethAddress, uint256 Ax, uint256 Ay);
 
     /**
      * @dev Event called when a batch is forged
      * Contains all off-chain transaction compressed
     */
     event ForgeBatch(uint batchNumber, uint blockNumber);
-
-    /**
-     * @dev Event called when a user makes a force withdraw
-     * contains all data required for the operator to add the transaction
-    */
-    event ForceWithdraw(uint batchNumber, bytes32 txData);
-
-    /**
-     * @dev Event called when a deposit on top is done
-     * Contains all data required by the operator to do:
-     * deposit on balance tree leaf
-    */
-    event DepositOnTop(uint batchNumber, bytes32 txData, uint128 loadAmount);
 
     /**
      * @dev Event called when a token is added to token list
@@ -168,6 +155,8 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         totalFillingOnChainFee += onChainFee;
         // Update number of on-chain transactions
         currentOnChainTx++;
+        // trigger on chain tx event event
+        emit OnChainTx(getStateDepth(), bytes32(txData), loadAmount, ethAddress, babyPubKey[0], babyPubKey[1]);
     }
 
     /**
@@ -198,8 +187,6 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         // Insert tree information
         treeInfo[lastBalanceTreeIndex].tokenId = tokenId;
         treeInfo[lastBalanceTreeIndex].ethAddress = ethAddress;
-        // trigger deposit event
-        emit Deposit(getStateDepth(), txDataDeposit, loadAmount, ethAddress, babyPubKey[0], babyPubKey[1]);
         // Increment index leaf balance tree
         lastBalanceTreeIndex++;
     }
@@ -220,14 +207,14 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
         require(loadAmount < MAX_AMOUNT_DEPOSIT, 'deposit amount larger than the maximum allowed');
-        require(idBalanceTree <= lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
+        require(idBalanceTree < lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
         require(treeInfo[idBalanceTree].tokenId == tokenId, 'token type does not match');
         // Get token deposit on rollup smart contract
         require(depositToken(tokenId, loadAmount), 'Fail deposit ERC20 transaction');
         // build txData for deposit on top
-        bytes32 txDataDepositOnTop = buildTxData(0, idBalanceTree, 0, tokenId, nonce, 0, 0, true, false);
+        bytes32 txDataDepositOnTop = buildTxData(0, idBalanceTree, 0, tokenId, nonce, 0, 0, true, true);
         _updateOnChainHash(uint256(txDataDepositOnTop), loadAmount, address(0), [uint(0), uint(0)], msg.value);
-        emit DepositOnTop(getStateDepth(), txDataDepositOnTop, loadAmount);
+        // lastBalanceTreeIndex++;
     }
 
     /**
@@ -245,11 +232,10 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
         require(msg.sender == treeInfo[idBalanceTree].ethAddress, 'Sender does not match identifier balance tree');
-        require(idBalanceTree <= lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
+        require(idBalanceTree < lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
         // build txData for withdraw
         bytes32 txDataWithdraw = buildTxData(idBalanceTree, 0, amount, treeInfo[idBalanceTree].tokenId, nonce, 0, 0, true, false);
         _updateOnChainHash(uint256(txDataWithdraw), 0, address(0), [uint(0), uint(0)], msg.value);
-        emit ForceWithdraw(getStateDepth(), txDataWithdraw);
     }
 
     /**
