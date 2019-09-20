@@ -143,8 +143,8 @@ contract("Rollup", (accounts) => {
     // - Transaction to deposit 'TokenRollup' from 'id1' to 'rollup smart contract'(owner)
     // - Check 'tokenRollup' balances
     // - Get event data
-    // - Add leaf to balance tree
-    // - Check 'filling on-chain' hash
+    // - Update rollupTree
+    // - forge blocks to include deposit
 
         const depositAmount = 10;
         const tokenId = 0;
@@ -183,7 +183,6 @@ contract("Rollup", (accounts) => {
             input0.onChainHash, input0.feePlan, input0.compressedTx, input0.offChainHash, input0.nTxPerToken,
             input0.beneficiary);
         await rollupDB.consolidate(blockGenesis);
-
         // Forge block with deposit transacction
         const bb = await rollupDB.buildBlock(maxTx, nLevels);
         bb.addTx({
@@ -204,75 +203,73 @@ contract("Rollup", (accounts) => {
             input1.beneficiary);
         
         expect(resBatchNumber.add(BigInt(2)).toString()).to.be.equal(rollupDB.lastBlock.toString());
-
-        // console.log("1 leaf", rollupDB.db.nodes);
     });
 
     it("Deposit on top and forge it", async () => {
-        // const fromId = 1;
-        // const onTopAmount = 5;
-        // const tokenId = 0;
-        // const nonce = 0;
+    // Steps:
+    // - Transaction to deposit 'TokenRollup' to 'id1', which was created is previous step
+    // - Check 'tokenRollup' balances
+    // - Get event data
+    // - Update rollupTree
+    // - forge blocks to include deposit on top
+        const toId = 1;
+        const onTopAmount = 5;
+        const tokenId = 0;
+        const nonce = 0;
 
-        // const resApprove = await insTokenRollup.approve(insRollupTest.address, onTopAmount, { from: id1 });
-        // expect(resApprove.logs[0].event).to.be.equal("Approval");
+        const resApprove = await insTokenRollup.approve(insRollupTest.address, onTopAmount, { from: id1 });
+        expect(resApprove.logs[0].event).to.be.equal("Approval");
 
-        // const resDepositonTop = await insRollupTest.depositOnTop(fromId, onTopAmount, tokenId,
-        //     nonce, { from: id1, value: web3.utils.toWei("1", "ether") });
-        // expect(resDepositonTop.logs[0].event).to.be.equal("OnChainTx");
+        const resDepositonTop = await insRollupTest.depositOnTop(toId, onTopAmount, tokenId,
+            nonce, { from: id1, value: web3.utils.toWei("1", "ether") });
+        expect(resDepositonTop.logs[0].event).to.be.equal("OnChainTx");
 
-        // // Check token balances for id1 and rollup smart contract
-        // const resRollup = await insTokenRollup.balanceOf(insRollupTest.address);
-        // const resId1 = await insTokenRollup.balanceOf(id1);
-        // expect(resRollup.toString()).to.be.equal("15");
-        // expect(resId1.toString()).to.be.equal("35");
+        // Check token balances for id1 and rollup smart contract
+        const resRollup = await insTokenRollup.balanceOf(insRollupTest.address);
+        const resId1 = await insTokenRollup.balanceOf(id1);
+        expect(resRollup.toString()).to.be.equal("15");
+        expect(resId1.toString()).to.be.equal("35");
 
-        // // Get event 'OnChainTx' data
-        // const resBatchNumber = BigInt(resDepositonTop.logs[0].args.batchNumber);
-        // const resTxData = resDepositonTop.logs[0].args.txData;
-        // const resLoadAmount = BigInt(resDepositonTop.logs[0].args.loadAmount);
-        // const resEthAddress = BigInt(resDepositonTop.logs[0].args.ethAddress).toString();
-        // const resAx = BigInt(resDepositonTop.logs[0].args.Ax).toString(16);
-        // const resAy = BigInt(resDepositonTop.logs[0].args.Ay).toString(16);
-        // const txData = rollupUtils.decodeTxData(resTxData);
-        // console.log(txData);
-        // console.log(rollupUtils.decodeTxData("0x0018000000000000000000000000000000000000000000010000000000000000"));
-        // console.log("Check0", resTxData);
-        // console.log("Check1", "0x0018000000000000000000000000000000000000000000010000000000000000");
-        // // forge block with no tx
-        // const bb0 = await rollupDB.buildBlock(maxTx, nLevels);
-        // await bb0.build();
-        // const input0 = buildInputSm(bb0, beneficiary);
+        // Get event 'OnChainTx' data
+        const resBatchNumber = BigInt(resDepositonTop.logs[0].args.batchNumber);
+        const resTxData = resDepositonTop.logs[0].args.txData;
+        const resLoadAmount = BigInt(resDepositonTop.logs[0].args.loadAmount);
+        const resEthAddress = BigInt(resDepositonTop.logs[0].args.ethAddress).toString();
+        const resAx = BigInt(resDepositonTop.logs[0].args.Ax).toString(16);
+        const resAy = BigInt(resDepositonTop.logs[0].args.Ay).toString(16);
+        const txData = rollupUtils.decodeTxData(resTxData);
+        // forge block with no tx
+        const bb0 = await rollupDB.buildBlock(maxTx, nLevels);
+        await bb0.build();
+        const input0 = buildInputSm(bb0, beneficiary);
 
-        // await insRollupTest.forgeBatchTest(input0.oldStateRoot, input0.newStateRoot, input0.newExitRoot,
-        //     input0.onChainHash, input0.feePlan, input0.compressedTx, input0.offChainHash, input0.nTxPerToken,
-        //     input0.beneficiary);
-        // await rollupDB.consolidate(bb0);
-        // // forge block with deposit on top transacction
-        // const bb1 = await rollupDB.buildBlock(maxTx, nLevels);
-        
-        // bb1.addTx({
-        //     fromIdx: txData.fromId,
-        //     toIdx: txData.toId,
-        //     loadAmount: resLoadAmount,
-        //     coin: txData.tokenId,
-        //     ax: resAx,
-        //     ay: resAy,
-        //     ethAddress: resEthAddress,
-        //     onChain: true,
-        // });
-        // await bb1.build();
-        // await rollupDB.consolidate(bb1);
-        // const input1 = buildInputSm(bb1, beneficiary);
-        // console.log("BO");
-        // await insRollupTest.forgeBatchTest(input1.oldStateRoot, input1.newStateRoot, input1.newExitRoot,
-        //     input1.onChainHash, input1.feePlan, input1.compressedTx, input1.offChainHash, input1.nTxPerToken,
-        //     input1.beneficiary);
-        // expect(resBatchNumber.add(BigInt(2)).toString()).to.be.equal(rollupDB.lastBlock.toString());
+        await insRollupTest.forgeBatchTest(input0.oldStateRoot, input0.newStateRoot, input0.newExitRoot,
+            input0.onChainHash, input0.feePlan, input0.compressedTx, input0.offChainHash, input0.nTxPerToken,
+            input0.beneficiary);
+        await rollupDB.consolidate(bb0);
+        // forge block with deposit on top transacction
+        const bb1 = await rollupDB.buildBlock(maxTx, nLevels);
+        bb1.addTx({
+            fromIdx: txData.fromId,
+            toIdx: txData.toId,
+            loadAmount: resLoadAmount,
+            coin: txData.tokenId,
+            ax: resAx,
+            ay: resAy,
+            ethAddress: resEthAddress,
+            onChain: true,
+        });
+        await bb1.build();
+        await rollupDB.consolidate(bb1);
+        const input1 = buildInputSm(bb1, beneficiary);
+        await insRollupTest.forgeBatchTest(input1.oldStateRoot, input1.newStateRoot, input1.newExitRoot,
+            input1.onChainHash, input1.feePlan, input1.compressedTx, input1.offChainHash, input1.nTxPerToken,
+            input1.beneficiary);
+        expect(resBatchNumber.add(BigInt(2)).toString()).to.be.equal(rollupDB.lastBlock.toString());
     });
 
     it("force withdraw and forge it", async () => {
-        // console.log("still 1 leaf", rollupDB.db.nodes);
+
     });
 
     it("fill addresses with rollup token, deposit on rollup and update balance tree", async () => {

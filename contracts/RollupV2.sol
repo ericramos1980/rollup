@@ -212,9 +212,9 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         // Get token deposit on rollup smart contract
         require(depositToken(tokenId, loadAmount), 'Fail deposit ERC20 transaction');
         // build txData for deposit on top
-        bytes32 txDataDepositOnTop = buildTxData(0, idBalanceTree, 0, tokenId, nonce, 0, 0, true, true);
+        bytes32 txDataDepositOnTop = buildTxData(lastBalanceTreeIndex, idBalanceTree, 0, tokenId, nonce, 0, 0, true, true);
         _updateOnChainHash(uint256(txDataDepositOnTop), loadAmount, address(0), [uint(0), uint(0)], msg.value);
-        // lastBalanceTreeIndex++;
+        lastBalanceTreeIndex++;
     }
 
     /**
