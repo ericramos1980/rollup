@@ -196,13 +196,11 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * @param idBalanceTree account identifier on the balance tree which will receive the deposit
      * @param loadAmount amount to be added into leaf specified by idBalanceTree
      * @param tokenId token identifier
-     * @param nonce nonce
     */
     function depositOnTop(
         uint64 idBalanceTree,
         uint128 loadAmount,
-        uint32 tokenId,
-        uint48 nonce
+        uint32 tokenId
     ) public payable{
         require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
@@ -212,7 +210,7 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
         // Get token deposit on rollup smart contract
         require(depositToken(tokenId, loadAmount), 'Fail deposit ERC20 transaction');
         // build txData for deposit on top
-        bytes32 txDataDepositOnTop = buildTxData(lastBalanceTreeIndex, idBalanceTree, 0, tokenId, nonce, 0, 0, true, true);
+        bytes32 txDataDepositOnTop = buildTxData(lastBalanceTreeIndex, idBalanceTree, 0, tokenId, 0, 0, 0, true, true);
         _updateOnChainHash(uint256(txDataDepositOnTop), loadAmount, address(0), [uint(0), uint(0)], msg.value);
         lastBalanceTreeIndex++;
     }
@@ -222,20 +220,19 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * user has to prove ownership of ethAddress
      * @param idBalanceTree account identifier on the balance tree which will do the withdraw
      * @param amount total amount coded as float 16 bits
-     * @param nonce nonce
      */
     function forceWithdraw(
         uint64 idBalanceTree,
         uint16 amount,
-        uint48 nonce
+        uint256[2] memory babyPubKey
     ) public payable{
         require(msg.value >= FEE_ONCHAIN_TX, 'Amount deposited less than fee required');
         require(currentOnChainTx < MAX_ONCHAIN_TX, 'Reached maximum number of on-chain transactions');
         require(msg.sender == treeInfo[idBalanceTree].ethAddress, 'Sender does not match identifier balance tree');
         require(idBalanceTree < lastBalanceTreeIndex, 'identifier leaf does not exist on balance tree');
         // build txData for withdraw
-        bytes32 txDataWithdraw = buildTxData(idBalanceTree, 0, amount, treeInfo[idBalanceTree].tokenId, nonce, 0, 0, true, false);
-        _updateOnChainHash(uint256(txDataWithdraw), 0, address(0), [uint(0), uint(0)], msg.value);
+        bytes32 txDataWithdraw = buildTxData(idBalanceTree, 0, amount, treeInfo[idBalanceTree].tokenId, 0, 0, 0, true, false);
+        _updateOnChainHash(uint256(txDataWithdraw), 0, msg.sender, babyPubKey, msg.value);
     }
 
     /**
@@ -247,7 +244,7 @@ contract RollupV2 is Ownable, RollupHelpersV2, RollupInterface {
      * @param idBalanceTree account identifier on the balance tree
      * @param amount amount to retrieve
      * @param tokenId token type
-     * @param numExitRoot exit root depth. Number of batch where the withdar transaction has been done
+     * @param numExitRoot exit root depth. Number of batch where the withdraw transaction has been done
      * @param nonce nonce exit tree leaf
      * @param babyPubKey BabyJubjub public key
      * @param siblings siblings to demonstrate merkle tree proof
